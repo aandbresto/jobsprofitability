@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Cost Dashboard — Above & Beyond</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #0f1f3d; --navy-mid: #1a3260; --blue: #1e4fc2;
+    --teal: #0d9488; --teal-light: #14b8a6; --amber-light: #fbbf24;
+    --slate-light: #f1f5f9; --border: #e2e8f0;
+    --text: #1e293b; --text-muted: #64748b; --white: #ffffff;
+  }
+  body { font-family: 'Inter', sans-serif; background: #f8fafc; color: var(--text); min-height: 100vh; }
+
+  .header { background: var(--navy); padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .header-brand .company { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--teal-light); }
+  .header-brand .title { font-size: 18px; font-weight: 700; color: var(--white); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .header-badge { background: rgba(255,255,255,0.1); color: white; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+  .refresh-btn { background: var(--teal); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .refresh-btn:hover { background: var(--teal-light); }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+  /* FILTER BAR */
+  .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .filter-btn { background: white; border: 1.5px solid var(--border); padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted); transition: all 0.15s; }
+  .filter-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .filter-btn.active { background: var(--navy); border-color: var(--navy); color: white; }
+  .search-input { flex: 1; min-width: 200px; border: 1.5px solid var(--border); border-radius: 20px; padding: 8px 16px; font-size: 13px; font-family: 'Inter', sans-serif; outline: none; }
+  .search-input:focus { border-color: var(--blue); }
+
+  /* LOADING / EMPTY */
+  .loading-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+  .loading-spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
+  .empty-state h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+
+  /* JOB CARDS GRID */
+  .jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .job-card { background: white; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s, transform 0.15s; }
+  .job-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
+  .job-card-header { background: var(--navy); padding: 16px 20px; }
+  .job-card-number { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal-light); margin-bottom: 4px; }
+  .job-card-name { font-size: 15px; font-weight: 700; color: white; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .job-card-client { font-size: 12px; color: #94a3b8; }
+  .job-card-body { padding: 16px 20px; }
+  .job-card-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+  .stat-value { font-size: 16px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--text); }
+  .stat-value.profit { color: var(--teal); }
+  .stat-value.loss { color: #dc2626; }
+  .stat-value.margin { color: var(--blue); }
+  .job-card-footer { display: flex; align-items: center; justify-content: space-between; }
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+  .status-badge.completed { background: #dcfce7; color: #166534; }
+  .status-badge.in-progress { background: #fef9c3; color: #854d0e; }
+  .card-date { font-size: 11px; color: var(--text-muted); }
+
+  /* DETAIL MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: flex-start; justify-content: center; padding: 24px; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 16px; width: 100%; max-width: 860px; overflow: hidden; margin: auto; }
+  .modal-header { background: var(--navy); padding: 24px 28px; color: white; position: relative; }
+  .modal-header .job-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--teal-light); margin-bottom: 4px; }
+  .modal-header .job-name { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+  .modal-header .job-meta { font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .modal-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.1); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: rgba(255,255,255,0.2); }
+
+  .modal-summary { background: var(--navy-mid); display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 3px solid var(--teal); }
+  .modal-stat { padding: 16px; text-align: center; border-right: 1px solid rgba(255,255,255,0.08); }
+  .modal-stat:last-child { border-right: none; }
+  .modal-stat .ms-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 4px; }
+  .modal-stat .ms-value { font-size: 18px; font-weight: 700; color: white; font-family: 'DM Mono', monospace; }
+  .ms-value.profit-pos { color: var(--teal-light); }
+  .ms-value.profit-neg { color: #f87171; }
+  .ms-value.cost { color: #f87171; }
+  .ms-value.margin-pos { color: var(--amber-light); }
+  .ms-value.margin-neg { color: #f87171; }
+
+  .modal-body { padding: 0; }
+
+  /* Invoice strip */
+  .inv-strip { padding: 14px 28px; background: var(--slate-light); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .inv-strip-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-right: 4px; }
+  .inv-chip { display: inline-flex; align-items: center; gap: 6px; background: white; border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; }
+  .inv-chip .chip-num { color: var(--text-muted); }
+  .inv-chip .chip-amt { font-family: 'DM Mono', monospace; font-weight: 600; }
+  .chip-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
+  .chip-badge.completed { background: #dcfce7; color: #166534; }
+  .chip-badge.pending { background: #fef9c3; color: #854d0e; }
+
+  /* Expense sections */
+  .exp-section { border-bottom: 1px solid var(--border); }
+  .exp-section:last-child { border-bottom: none; }
+  .exp-section-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 28px; background: #fafbfd; cursor: pointer; user-select: none; }
+  .exp-section-header:hover { background: var(--slate-light); }
+  .exp-section-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  .exp-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .exp-total { font-size: 14px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .exp-chevron { font-size: 11px; color: var(--text-muted); margin-left: 10px; transition: transform 0.2s; }
+  .exp-chevron.open { transform: rotate(180deg); }
+  .exp-table-wrap { display: none; overflow-x: auto; }
+  .exp-table-wrap.open { display: block; }
+
+  .modal-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .modal-table thead th { padding: 8px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); border-bottom: 1px solid var(--border); background: white; }
+  .modal-table thead th:last-child { text-align: right; }
+  .modal-table tbody td { padding: 9px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  .modal-table tbody tr:last-child td { border-bottom: none; }
+  .modal-table tbody tr:hover { background: #fafbfd; }
+  .td-right { text-align: right; font-family: 'DM Mono', monospace; font-weight: 500; }
+  .td-right.calc { color: #1d4ed8; }
+  .td-muted { color: var(--text-muted); font-size: 12px; }
+  .td-date { color: var(--text-muted); white-space: nowrap; }
+  .calc-tag { font-size: 10px; background: #eff6ff; color: #1d4ed8; font-weight: 600; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+  .no-rate-tag { font-size: 10px; background: #fef3c7; color: #92400e; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+
+  .modal-total-row { padding: 16px 28px; display: flex; justify-content: space-between; border-top: 2px solid var(--navy); background: var(--slate-light); font-weight: 700; }
+  .modal-total-row .label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--navy); }
+  .modal-total-row .amount { font-size: 18px; font-family: 'DM Mono', monospace; color: var(--navy); }
+
+  .modal-footer { padding: 16px 28px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+  .btn-close { background: var(--slate-light); color: var(--text); }
+  .btn-print { background: var(--navy); color: white; }
+
+  @media print {
+    .header, .filter-bar, .jobs-grid, .modal-footer, .modal-close, .refresh-btn { display: none !important; }
+    .modal-overlay { position: static !important; padding: 0 !important; background: none !important; }
+    .modal { border-radius: 0 !important; box-shadow: none !important; max-width: 100% !important; }
+    .exp-table-wrap { display: block !important; }
+    .exp-chevron { display: none; }
+    .modal-summary, .modal-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-brand">
+    <span class="company">Above &amp; Beyond Restoration</span>
+    <span class="title">Job Cost Dashboard</span>
+  </div>
+  <div class="header-right">
+    <span class="header-badge">Team View</span>
+    <button class="refresh-btn" onclick="loadJobs()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('all', this)">All Jobs</button>
+    <button class="filter-btn" onclick="setFilter('In Progress', this)">⏳ In Progress</button>
+    <button class="filter-btn" onclick="setFilter('Completed', this)">✓ Completed</button>
+    <input class="search-input" id="searchInput" placeholder="Search by job name, number, or client..." oninput="renderJobs()">
+  </div>
+
+  <div id="jobsContainer">
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>Loading jobs...</p>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://efcioscqqmqfwagnimly.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Orv_ufmFJ8_n8ltqCA6KQw_KztIkQeS';
+
+let allJobs = [];
+let currentFilter = 'all';
+
+async function loadJobs() {
+  document.getElementById('jobsContainer').innerHTML = `<div class="loading-state"><div class="loading-spinner"></div><p>Loading jobs...</p></div>`;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/job_cost_reports?select=*&order=updated_at.desc`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    allJobs = await res.json();
+    renderJobs();
+  } catch (e) {
+    document.getElementById('jobsContainer').innerHTML = `<div class="empty-state"><h3>Could not load jobs</h3><p>Check your connection and try refreshing.</p></div>`;
+  }
+}
+
+function setFilter(val, btn) {
+  currentFilter = val;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderJobs();
+}
+
+function renderJobs() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  let jobs = allJobs.filter(j => {
+    const matchesFilter = currentFilter === 'all' || j.status === currentFilter;
+    const matchesSearch = !search ||
+      (j.job_name || '').toLowerCase().includes(search) ||
+      (j.job_number || '').toLowerCase().includes(search) ||
+      (j.client_name || '').toLowerCase().includes(search);
+    return matchesFilter && matchesSearch;
+  });
+
+  if (jobs.length === 0) {
+    document.getElementById('jobsContainer').innerHTML = `<div class="empty-state"><h3>No jobs found</h3><p>No reports have been published yet, or nothing matches your search.</p></div>`;
+    return;
+  }
+
+  document.getElementById('jobsContainer').innerHTML = `<div class="jobs-grid">${jobs.map(job => jobCard(job)).join('')}</div>`;
+}
+
+function jobCard(job) {
+  const profit = job.gross_profit || 0;
+  const margin = job.gross_margin || 0;
+  const profitClass = profit >= 0 ? 'profit' : 'loss';
+  const statusClass = (job.status || '').toLowerCase().replace(' ', '-');
+  const date = job.report_date ? new Date(job.report_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  return `<div class="job-card" onclick="openJob('${job.id}')">
+    <div class="job-card-header">
+      <div class="job-card-number">${job.job_number || 'No Number'}</div>
+      <div class="job-card-name">${job.job_name || 'Unnamed Job'}</div>
+      <div class="job-card-client">${job.client_name || ''}</div>
+    </div>
+    <div class="job-card-body">
+      <div class="job-card-stats">
+        <div class="stat"><span class="stat-label">Revenue</span><span class="stat-value">${fmt(job.revenue)}</span></div>
+        <div class="stat"><span class="stat-label">Total Cost</span><span class="stat-value">${fmt(job.total_cost)}</span></div>
+        <div class="stat"><span class="stat-label">Gross Profit</span><span class="stat-value ${profitClass}">${fmt(profit)}</span></div>
+        <div class="stat"><span class="stat-label">Margin</span><span class="stat-value margin">${margin.toFixed(1)}%</span></div>
+      </div>
+      <div class="job-card-footer">
+        <span class="status-badge ${statusClass}">${job.status === 'Completed' ? '✓ Completed' : '⏳ In Progress'}</span>
+        <span class="card-date">${date}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function openJob(id) {
+  const job = allJobs.find(j => j.id === id);
+  if (!job) return;
+
+  const profit = job.gross_profit || 0;
+  const margin = job.gross_margin || 0;
+  const profitClass = profit >= 0 ? 'profit-pos' : 'profit-neg';
+  const marginClass = margin >= 0 ? 'margin-pos' : 'margin-neg';
+  const statusClass = (job.status || '').toLowerCase().replace(' ', '-');
+  const date = job.report_date ? new Date(job.report_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+
+  const invoices = job.invoices || [];
+  const expenses = job.expenses || [];
+
+  // Group expenses by category
+  const catConfig = [
+    { key: 'equipment',     label: 'Equipment',            icon: '🔧', bg: '#dbeafe' },
+    { key: 'labour',        label: 'Labour',               icon: '👷', bg: '#dcfce7' },
+    { key: 'materials',     label: 'Supplies & Materials', icon: '🏗️', bg: '#fef9c3' },
+    { key: 'subcontractor', label: 'Subcontractors',       icon: '📋', bg: '#ede9fe' },
+    { key: 'other',         label: 'Other Expenses',       icon: '📁', bg: '#fee2e2' },
+  ];
+
+  const grouped = {};
+  catConfig.forEach(c => { grouped[c.key] = expenses.filter(e => e.category === c.key); });
+
+  const invChips = invoices.length > 0 ? `<div class="inv-strip">
+    <span class="inv-strip-label">Invoices</span>
+    ${invoices.map(inv => `<div class="inv-chip">
+      <span class="chip-num">#${inv.number}</span>
+      <span class="chip-amt">${fmt(inv.amount)}</span>
+      <span class="chip-badge ${(inv.status||'').toLowerCase() === 'completed' ? 'completed' : 'pending'}">${inv.status}</span>
+    </div>`).join('')}
+  </div>` : '';
+
+  const expSections = catConfig.map((cat, idx) => {
+    const rows = grouped[cat.key];
+    if (!rows || rows.length === 0) return '';
+    const catTotal = rows.reduce((s, r) => s + (r.amount || 0), 0);
+    const isFirst = idx === 0;
+    return `<div class="exp-section">
+      <div class="exp-section-header" onclick="toggleExp('mexp-${cat.key}', 'mchev-${cat.key}')">
+        <div class="exp-section-title">
+          <div class="exp-icon" style="background:${cat.bg}">${cat.icon}</div>
+          ${cat.label} <span style="font-weight:400;color:var(--text-muted);font-size:12px;">(${rows.length})</span>
+        </div>
+        <div style="display:flex;align-items:center;">
+          <span class="exp-total">${fmt(catTotal)}</span>
+          <span class="exp-chevron ${isFirst ? 'open' : ''}" id="mchev-${cat.key}">▼</span>
+        </div>
+      </div>
+      <div class="exp-table-wrap ${isFirst ? 'open' : ''}" id="mexp-${cat.key}">
+        <table class="modal-table">
+          <thead><tr>
+            <th>Date</th><th>Description</th><th>Payee</th>
+            ${cat.key === 'labour' ? '<th>Hours</th>' : ''}
+            <th>Amount</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r => {
+              const amtCell = r.no_rate
+                ? `<td class="td-right"><span class="no-rate-tag">⚠ No Rate</span></td>`
+                : r.calculated
+                  ? `<td class="td-right calc">${fmt(r.amount)}<span class="calc-tag">@ $${r.rate}/hr</span></td>`
+                  : `<td class="td-right">${fmt(r.amount)}</td>`;
+              return `<tr>
+                <td class="td-date">${fmtDate(r.date)}</td>
+                <td>${r.description || '—'}</td>
+                <td class="td-muted">${r.payee || '—'}</td>
+                ${cat.key === 'labour' ? `<td style="font-family:'DM Mono',monospace;">${r.hours ? r.hours + ' hrs' : '—'}</td>` : ''}
+                ${amtCell}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('modalContent').innerHTML = `
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="job-label">Job Cost Report</div>
+      <div class="job-name">${job.job_name || 'Unnamed Job'}${job.job_number ? ' &nbsp;·&nbsp; <span style="font-weight:400;font-size:16px;">' + job.job_number + '</span>' : ''}</div>
+      <div class="job-meta">${job.client_name ? job.client_name + ' &nbsp;|&nbsp; ' : ''}${date} &nbsp;
+        <span class="status-badge ${statusClass}" style="font-size:11px;">${job.status === 'Completed' ? '✓ Completed' : '⏳ In Progress'}</span>
+      </div>
+    </div>
+    <div class="modal-summary">
+      <div class="modal-stat"><div class="ms-label">Revenue</div><div class="ms-value">${fmt(job.revenue)}</div></div>
+      <div class="modal-stat"><div class="ms-label">Total Cost</div><div class="ms-value cost">${fmt(job.total_cost)}</div></div>
+      <div class="modal-stat"><div class="ms-label">Gross Profit</div><div class="ms-value ${profitClass}">${fmt(profit)}</div></div>
+      <div class="modal-stat"><div class="ms-label">Gross Margin</div><div class="ms-value ${marginClass}">${margin.toFixed(1)}%</div></div>
+    </div>
+    <div class="modal-body">
+      ${invChips}
+      ${expSections}
+      <div class="modal-total-row">
+        <span class="label">Total Job Cost</span>
+        <span class="amount">${fmt(job.total_cost)}</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-close" onclick="closeModal()">Close</button>
+      <button class="btn btn-print" onclick="window.print()">🖨 Print / Save PDF</button>
+    </div>`;
+
+  document.getElementById('modalOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+}
+
+function toggleExp(tableId, chevId) {
+  document.getElementById(tableId).classList.toggle('open');
+  document.getElementById(chevId).classList.toggle('open');
+}
+
+function fmt(val) {
+  if (val === null || val === undefined) return '—';
+  return '$' + Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(val) {
+  if (!val) return '—';
+  const d = new Date(val);
+  return isNaN(d) ? val : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+loadJobs();
+</script>
+</body>
+</html>
