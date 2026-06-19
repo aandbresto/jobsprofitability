@@ -71,6 +71,31 @@
   }
   .search-input:focus { border-color: var(--accent); }
 
+  .quarter-wrap { position: relative; }
+  .quarter-select {
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 7px 30px 7px 14px; font-size: 13px; font-weight: 500;
+    font-family: 'Inter', sans-serif; outline: none;
+    background: var(--white); color: var(--text); cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+  }
+  .quarter-select:focus { border-color: var(--accent); }
+
+  .bonus-pool-bar {
+    background: var(--navy); border-radius: 6px; padding: 16px 24px;
+    margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .bonus-pool-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca8b5; }
+  .bonus-pool-period { font-size: 14px; font-weight: 600; color: white; margin-top: 2px; }
+  .bonus-pool-stats { display: flex; align-items: center; gap: 28px; }
+  .bonus-pool-stat { text-align: right; }
+  .bonus-pool-stat .bp-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca8b5; margin-bottom: 3px; }
+  .bonus-pool-stat .bp-value { font-size: 20px; font-weight: 600; font-family: 'DM Mono', monospace; color: white; }
+  .bonus-pool-stat .bp-value.accent { color: #6fcfa8; }
+
   /* LOADING / EMPTY */
   .loading-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
   .loading-spinner {
@@ -110,10 +135,10 @@
   .job-row-name .meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
   .job-row-amount { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); }
   .job-row-amount.muted { color: var(--text-light); }
-  .job-row-profit { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; }
+  .job-row-profit { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
   .job-row-profit.profit { color: var(--green); }
   .job-row-profit.loss { color: var(--red); }
-  .job-row-margin { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .job-row-margin { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 500; }
 
   /* STATUS BADGES */
   .status-badge {
@@ -163,7 +188,7 @@
   .modal-stat { padding: 16px; text-align: center; border-right: 1px solid var(--border); }
   .modal-stat:last-child { border-right: none; }
   .modal-stat .ms-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 6px; }
-  .modal-stat .ms-value { font-size: 16px; font-weight: 700; color: var(--text); font-family: 'DM Mono', monospace; }
+  .modal-stat .ms-value { font-size: 16px; font-weight: 500; color: var(--text); font-family: 'DM Mono', monospace; }
   .ms-value.profit-pos { color: var(--green); }
   .ms-value.profit-neg { color: var(--red); }
   .ms-value.cost { color: var(--red); }
@@ -249,10 +274,17 @@
     <button class="filter-btn active" onclick="setFilter('all',this)">All Jobs</button>
     <button class="filter-btn" onclick="setFilter('In Progress',this)">In Progress</button>
     <button class="filter-btn" onclick="setFilter('Completed',this)">Completed</button>
+    <div class="quarter-wrap">
+      <select class="quarter-select" id="quarterSelect" onchange="renderJobs()">
+        <option value="all">All Time</option>
+      </select>
+    </div>
     <div class="search-wrap">
       <input class="search-input" id="searchInput" placeholder="Search by job name, number, or client..." oninput="renderJobs()">
     </div>
   </div>
+
+  <div id="bonusPoolBar" style="display:none;"></div>
   <div id="jobsContainer">
     <div class="loading-state"><div class="loading-spinner"></div><p style="margin-top:8px;font-size:13px;">Loading jobs...</p></div>
   </div>
@@ -276,10 +308,35 @@ async function loadJobs() {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
     });
     allJobs = await res.json();
+    populateQuarterOptions();
     renderJobs();
   } catch(e) {
     document.getElementById('jobsContainer').innerHTML = '<div class="empty-state"><h3>Could not load jobs</h3><p>Check your connection and try refreshing.</p></div>';
   }
+}
+
+function getQuarter(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d)) return null;
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return { year: d.getFullYear(), q, key: `${d.getFullYear()}-Q${q}`, label: `Q${q} ${d.getFullYear()}` };
+}
+
+function populateQuarterOptions() {
+  const select = document.getElementById('quarterSelect');
+  const prevValue = select.value;
+  const quarters = new Map();
+  allJobs.forEach(j => {
+    if (j.status === 'Completed' && j.completed_date) {
+      const qi = getQuarter(j.completed_date);
+      if (qi && !quarters.has(qi.key)) quarters.set(qi.key, qi.label);
+    }
+  });
+  const sortedKeys = Array.from(quarters.keys()).sort().reverse();
+  select.innerHTML = '<option value="all">All Time</option>' +
+    sortedKeys.map(k => `<option value="${k}">${quarters.get(k)}</option>`).join('');
+  if (sortedKeys.includes(prevValue)) select.value = prevValue;
 }
 
 function setFilter(val, btn) {
@@ -291,11 +348,44 @@ function setFilter(val, btn) {
 
 function renderJobs() {
   const search = (document.getElementById('searchInput').value||'').toLowerCase();
+  const quarterFilter = document.getElementById('quarterSelect').value;
+
   const jobs = allJobs.filter(j => {
     const mf = currentFilter==='all'||j.status===currentFilter;
     const ms = !search||(j.job_name||'').toLowerCase().includes(search)||(j.job_number||'').toLowerCase().includes(search)||(j.client_name||'').toLowerCase().includes(search);
-    return mf&&ms;
+    let mq = true;
+    if (quarterFilter !== 'all') {
+      const qi = j.status === 'Completed' ? getQuarter(j.completed_date) : null;
+      mq = qi && qi.key === quarterFilter;
+    }
+    return mf&&ms&&mq;
   });
+
+  // Bonus pool summary — only meaningful when a specific quarter is selected
+  const bonusBar = document.getElementById('bonusPoolBar');
+  if (quarterFilter !== 'all') {
+    const completedInQuarter = allJobs.filter(j => {
+      const qi = j.status === 'Completed' ? getQuarter(j.completed_date) : null;
+      return qi && qi.key === quarterFilter;
+    });
+    const poolRevenue = completedInQuarter.reduce((s,j) => s + (j.revenue||0), 0);
+    const poolProfit = completedInQuarter.reduce((s,j) => s + (j.gross_profit||0), 0);
+    const label = document.getElementById('quarterSelect').selectedOptions[0]?.textContent || '';
+    bonusBar.innerHTML = `<div class="bonus-pool-bar">
+      <div>
+        <div class="bonus-pool-label">Bonus Period</div>
+        <div class="bonus-pool-period">${label} · ${completedInQuarter.length} completed job${completedInQuarter.length!==1?'s':''}</div>
+      </div>
+      <div class="bonus-pool-stats">
+        <div class="bonus-pool-stat"><div class="bp-label">Total Revenue</div><div class="bp-value">${fmt(poolRevenue)}</div></div>
+        <div class="bonus-pool-stat"><div class="bp-label">Total Profit</div><div class="bp-value accent">${fmt(poolProfit)}</div></div>
+      </div>
+    </div>`;
+    bonusBar.style.display = 'block';
+  } else {
+    bonusBar.style.display = 'none';
+    bonusBar.innerHTML = '';
+  }
   if (!jobs.length) {
     document.getElementById('jobsContainer').innerHTML = '<div class="empty-state"><h3>No jobs found</h3><p>No reports published yet, or nothing matches your search.</p></div>';
     return;
@@ -303,7 +393,7 @@ function renderJobs() {
   document.getElementById('jobsContainer').innerHTML = `
     <div class="jobs-list">
       <div class="jobs-list-header">
-        <span>Job</span><span>Estimate</span><span>Revenue</span><span>Total Cost</span><span>Gross Profit</span><span>Margin</span><span>Status</span>
+        <span>Job</span><span>Estimate</span><span>Revenue</span><span>Total Cost</span><span>Profit</span><span>Margin</span><span>Status</span>
       </div>
       ${jobs.map(j=>jobRow(j)).join('')}
     </div>`;
@@ -313,10 +403,13 @@ function jobRow(job) {
   const profit=job.gross_profit||0, margin=job.gross_margin||0;
   const sc=(job.status||'').toLowerCase().replace(' ','-');
   const date=job.report_date?new Date(job.report_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+  const completedLabel = job.status==='Completed' && job.completed_date
+    ? ' · Completed ' + new Date(job.completed_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    : '';
   return `<div class="job-row" onclick="openJob('${job.id}')">
     <div class="job-row-name">
       <div class="name">${job.job_name||'Unnamed Job'}</div>
-      <div class="meta">${job.job_number||''}${job.client_name?' · '+job.client_name:''}${date?' · '+date:''}</div>
+      <div class="meta">${job.job_number||''}${job.client_name?' · '+job.client_name:''}${completedLabel || (date?' · '+date:'')}</div>
     </div>
     <div class="job-row-amount muted">${job.estimate>0?fmt(job.estimate):'—'}</div>
     <div class="job-row-amount">${fmt(job.revenue)}</div>
@@ -370,8 +463,8 @@ function openJob(id) {
       <div class="modal-stat"><div class="ms-label">Estimate</div><div class="ms-value estimate">${job.estimate>0?fmt(job.estimate):'—'}</div></div>
       <div class="modal-stat"><div class="ms-label">Revenue</div><div class="ms-value">${fmt(job.revenue)}</div></div>
       <div class="modal-stat"><div class="ms-label">Total Cost</div><div class="ms-value cost">${fmt(job.total_cost)}</div></div>
-      <div class="modal-stat"><div class="ms-label">Gross Profit</div><div class="ms-value ${profit>=0?'profit-pos':'profit-neg'}">${fmt(profit)}</div></div>
-      <div class="modal-stat"><div class="ms-label">Gross Margin</div><div class="ms-value ${margin>=0?'margin-pos':'margin-neg'}">${margin.toFixed(1)}%</div></div>
+      <div class="modal-stat"><div class="ms-label">Profit</div><div class="ms-value ${profit>=0?'profit-pos':'profit-neg'}">${fmt(profit)}</div></div>
+      <div class="modal-stat"><div class="ms-label">Margin</div><div class="ms-value ${margin>=0?'margin-pos':'margin-neg'}">${margin.toFixed(1)}%</div></div>
     </div>
     <div>${invChips}${expSections}
       <div class="modal-total-row"><span class="label">Total Job Cost</span><span class="amount">${fmt(job.total_cost)}</span></div>
